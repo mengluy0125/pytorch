@@ -750,21 +750,39 @@ def _post_backward_hook(
                 handle._use_unsharded_grad_views()
             return
 
+        if (
+            not _low_precision_hook_enabled(state)
+            and flat_param.grad.dtype != handle._reduce_dtype
+            # If we are forcing full precision but communicating grads
+            # (i.e. model.eval() + full precision in eval was configured), don't downcast gradient.
+            and not handle._force_full_precision
+        ):
+            flat_param.grad.data = flat_param.grad.to(handle._reduce_dtype)
+
+        if handle.uses_sharded_strategy:
+            # We clear `.grad` to permit multiple backwards. This avoids a
+            # race where the second backward pass computation precedes
+            # ahead of the first backward pass reduction, which is possible
+            # since the reduction is issued in a separate stream and is
+            # async and would result in reducing the wrong gradient.
+            unsharded_grad = flat_param.grad.data
+            flat_param.grad = None
+            chunks = list(unsharded_grad.chunk(state.world_size))
+            numel_to_pad = (
+                state.world_size * chunks[0].numel() - unsharded_grad.numel()
+            )
+            padded_unsharded_grad = (
+                F.pad(unsharded_grad, [0, numel_to_pad])
+                if numel_to_pad > 0
+                else unsharded_grad
+            )
+            new_sharded_grad = torch.empty_like(chunks[0])  # padded
+
         # Wait for all ops in the current stream (e.g. gradient
         # computation) to finish before reduce-scattering the gradient
         state._post_backward_stream.wait_stream(state._device_handle.current_stream())
 
         with state._device_handle.stream(state._post_backward_stream):
-            autograd_computed_grad = flat_param.grad.data
-            if (
-                not _low_precision_hook_enabled(state)
-                and flat_param.grad.dtype != handle._reduce_dtype
-                # If we are forcing full precision but communicating grads
-                # (i.e. model.eval() + full precision in eval was configured), don't downcast gradient.
-                and not handle._force_full_precision
-            ):
-                flat_param.grad.data = flat_param.grad.to(handle._reduce_dtype)
-
             prediv_factor = state._gradient_predivide_factor
             postdiv_factor = state._gradient_postdivide_factor
             if handle.uses_sharded_strategy:
@@ -772,24 +790,6 @@ def _post_backward_hook(
                     HandleShardingStrategy.HYBRID_SHARD,
                     HandleShardingStrategy._HYBRID_SHARD_ZERO2,
                 )
-                # We clear `.grad` to permit multiple backwards. This avoids a
-                # race where the second backward pass computation precedes
-                # ahead of the first backward pass reduction, which is possible
-                # since the reduction is issued in a separate stream and is
-                # async and would result in reducing the wrong gradient.
-                unsharded_grad = flat_param.grad.data
-                flat_param.grad = None
-                chunks = list(unsharded_grad.chunk(state.world_size))
-                numel_to_pad = (
-                    state.world_size * chunks[0].numel() - unsharded_grad.numel()
-                )
-                padded_unsharded_grad = (
-                    F.pad(unsharded_grad, [0, numel_to_pad])
-                    if numel_to_pad > 0
-                    else unsharded_grad
-                )
-                new_sharded_grad = torch.empty_like(chunks[0])  # padded
-
                 if state._comm_hook is None:  # default path
                     _div_if_needed(padded_unsharded_grad, prediv_factor)
                     dist.reduce_scatter_tensor(
@@ -855,13 +855,6 @@ def _post_backward_hook(
                     grad_to_offload.data,
                     state._post_backward_stream,
                 )
-
-            # Since the unsharded gradient is produced in the computation
-            # stream and consumed in the post-backward stream, inform the
-            # caching allocator (before it goes out of scope)
-            _no_dispatch_record_stream(
-                autograd_computed_grad, state._post_backward_stream
-            )
 
             if handle._use_orig_params:
                 # Since the handle's `FlatParameter` completed its gradient
