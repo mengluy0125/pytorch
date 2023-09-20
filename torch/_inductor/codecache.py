@@ -893,6 +893,8 @@ def get_include_and_linking_paths(
             # and raise error together with instructions at compilation error later
         else:
             libs = ["omp"] if config.is_fbcode() else ["gomp"]
+            if config.assert_indirect_indexing:
+                libs += ["c10", "torch_cpu"]
 
     # third party libs
     if config.is_fbcode():
