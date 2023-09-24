@@ -768,9 +768,7 @@ def _post_backward_hook(
             unsharded_grad = flat_param.grad.data
             flat_param.grad = None
             chunks = list(unsharded_grad.chunk(state.world_size))
-            numel_to_pad = (
-                state.world_size * chunks[0].numel() - unsharded_grad.numel()
-            )
+            numel_to_pad = state.world_size * chunks[0].numel() - unsharded_grad.numel()
             padded_unsharded_grad = (
                 F.pad(unsharded_grad, [0, numel_to_pad])
                 if numel_to_pad > 0
@@ -905,6 +903,7 @@ def _div_if_needed(tensor: torch.Tensor, div_factor: float) -> None:
         tensor.div_(div_factor)
 
 
+@no_type_check
 def _post_backward_reshard(
     state: _FSDPState,
     handle: FlatParamHandle,
