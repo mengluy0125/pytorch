@@ -1816,9 +1816,8 @@ c10::intrusive_ptr<Work> ProcessGroupNCCL::collective(
     // future blocks the stream this callback runs on the corresponding
     // ncclEndEvents_ ensuring appropriate synchronization.
     if (work->recordFunctionEndCallback_) {
-      work->future_->addCallback([work](at::ivalue::Future& /* unused */) {
-        work->recordFunctionEndCallback_();
-      });
+      work->future_->addCallback(
+          [work]() { work->recordFunctionEndCallback_(); });
     }
     work->future_->markCompleted(at::IValue(*work->outputs_));
   }
@@ -1996,9 +1995,8 @@ c10::intrusive_ptr<Work> ProcessGroupNCCL::pointToPoint(
   // future blocks the stream this callback runs on the corresponding
   // ncclEndEvents_ ensuring appropriate synchronization.
   if (work->recordFunctionEndCallback_) {
-    work->future_->addCallback([work](at::ivalue::Future& /* unused */) {
-      work->recordFunctionEndCallback_();
-    });
+    work->future_->addCallback(
+        [work]() { work->recordFunctionEndCallback_(); });
   }
 
   return work;
