@@ -94,6 +94,7 @@ from .distributed import (
 from .functions import (
     CollectiveFunctionRewriteVariable,
     FunctoolsPartialVariable,
+    TritonKernelVariable,
     UserFunctionVariable,
     UserMethodVariable,
 )
@@ -369,6 +370,16 @@ class VariableBuilder:
         return result
 
     def _wrap(self, value):
+        # import here to avoid circular dependencies
+        from torch.utils._triton import has_triton
+
+        if has_triton():
+            from triton.runtime.jit import JITFunction
+        else:
+
+            class JITFunction:
+                pass
+
         make_guards = self.make_guards
 
         # Handle exact type() match
@@ -777,6 +788,13 @@ class VariableBuilder:
             return SymNodeVariable(
                 sym_node_proxy,
                 new_symint == 1,
+            )
+        elif isinstance(value, JITFunction):
+            return TritonKernelVariable(
+                value,
+                None,  # No grid provided
+                source=self.source,
+                guards=make_guards(GuardBuilder.ID_MATCH),
             )
         else:
             result = UserDefinedObjectVariable(
