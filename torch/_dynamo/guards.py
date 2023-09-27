@@ -41,6 +41,9 @@ from torch._guards import (
     GuardSource,
     Source,
 )
+from torch._higher_order_ops.cast_symbool_to_symint import (
+    create_symint_guardless_no_proxy,
+)
 from torch.fx.experimental.symbolic_shapes import EqualityConstraint, SYMPY_INTERP
 
 from torch.utils._traceback import format_frame, report_compile_source_on_error
@@ -1202,6 +1205,7 @@ class CheckFunctionManager:
                 ("___check_tensors_verbose", check_tensors_verbose_fn),
                 ("___check_global_state", global_state.check),
                 ("tensor_check_names", tensor_check_names),
+                ("create_symint_guardless_no_proxy", create_symint_guardless_no_proxy),
             ]
             + list(SYMPY_INTERP.items())
         )
