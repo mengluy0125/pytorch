@@ -79,7 +79,7 @@ class ExportCase:
     # Tags associated with the use case. (e.g dynamic-shape, escape-hatch)
     tags: Set[str] = field(default_factory=lambda: set())
     support_level: SupportLevel = SupportLevel.SUPPORTED
-    constraints: List[Constraint] = field(default_factory=list)
+    dynamic_shapes: Optional[Dict[str, Any]] = None
 
     def __post_init__(self):
         check_inputs_type(self.example_inputs)

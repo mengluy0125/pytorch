@@ -5,7 +5,7 @@ from pathlib import Path
 
 import torch
 import torch._dynamo as torchdynamo
-from torch._export import export
+from torch.export import export
 
 from torch._export.db.case import ExportCase, normalize_inputs
 from torch._export.db.examples import all_examples
@@ -73,7 +73,7 @@ Result:
             model,
             inputs.args,
             inputs.kwargs,
-            constraints=example_case.constraints,
+            dynamic_shapes=example_case.dynamic_shapes,
         )
         graph_output = str(exported_program)
         graph_output = re.sub(r"        # File(.|\n)*?\n", "", graph_output)
