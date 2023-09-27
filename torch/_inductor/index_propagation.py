@@ -21,7 +21,7 @@ SymPy expressions yet, despite sympy.Min and sympy.Max existing.
 """
 import itertools
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Callable, Dict, Literal, Optional, overload, Tuple, Union
 
 import sympy
 
@@ -144,6 +144,9 @@ class IndexPropVar:
         ), "Symbolic IndexPropVar must contain a TypedExpr"
 
 
+IndexPropExpr = Union[IndexPropVar, Tuple[IndexPropExpr, ...]]
+
+
 class IndexPropagation:
     """Ops wrapper that tries to propagate constant and index_expr values through the computation.
 
@@ -176,22 +179,37 @@ class IndexPropagation:
 
         return a.value
 
-    def wrap(self, a: Any) -> Union[IndexPropVar, Sequence[IndexPropVar]]:
+    def wrap(self, a) -> IndexPropExpr:
         if isinstance(a, (list, tuple)):
             return tuple(self.wrap(v) for v in a)
         return IndexPropVar(a)
 
+    @overload
     def fallback(
-        self, name: str, args: Tuple, kwargs: Dict[str, Any]
-    ) -> Union[IndexPropVar, Tuple[IndexPropVar, ...]]:
+        self,
+        name: Literal["indirect_indexing"],
+        args: Tuple[Any, ...],
+        kwargs: Dict[str, Any],
+    ) -> IndexPropVar:
+        ...
+
+    @overload
+    def fallback(
+        self, name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+    ) -> IndexPropExpr:
+        ...
+
+    def fallback(
+        self, name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+    ) -> IndexPropExpr:
         # Fallback to the wrapped handler
         new_args = [self.unwrap(a) for a in args]
         new_kwargs = {k: self.unwrap(v) for k, v in kwargs.items()}
         return self.wrap(getattr(self._inner, name)(*new_args, **new_kwargs))
 
     def propagate_sympy(
-        self, name: str, args: Tuple, kwargs: Dict[str, Any]
-    ) -> IndexPropVar:
+        self, name: str, args: Tuple[Any, ...], kwargs: Dict[str, Any]
+    ) -> IndexPropExpr:
         # Build a new SymPy expression from this ops call
         def unwrap(a: Union[Any, IndexPropVar]) -> Any:
             if not isinstance(a, IndexPropVar):
@@ -211,8 +229,8 @@ class IndexPropagation:
             return self.fallback(name, args, kwargs)
         return IndexPropVar.new_symbolic(new_expr)
 
-    def __getattr__(self, name: str) -> Callable[..., Union[Any, IndexPropVar]]:
-        def inner(*args: Any, **kwargs: Any) -> Union[Any, IndexPropVar]:
+    def __getattr__(self, name: str) -> Callable[..., IndexPropExpr]:
+        def inner(*args: Any, **kwargs: Any) -> IndexPropExpr:
             if not hasattr(SymPyOps, name):
                 return self.fallback(name, args, kwargs)
 
