@@ -244,8 +244,10 @@ def pre_grad_passes(gm: torch.fx.GraphModule, example_inputs=None):
                 )
                 # we support run same pattern multiple times, the default is to run only once
                 counter = config.pre_grad_fusion_options[pass_name].get("counter", 1)
+                print("before apply pass: ", pattern_matcher_pass.pass_name, upload_graph(gm.graph))
                 for _ in range(counter):
                     pattern_matcher_pass.apply(gm.graph)  # type: ignore[arg-type]
+                print("after apply pass: ", pattern_matcher_pass.pass_name, upload_graph(gm.graph))
                 if not is_same_dict(counters["inductor"], inductor_before_change):
                     optimus_scuba_log[
                         f"{pattern_matcher_pass.pass_name}_pre_grad"
@@ -267,6 +269,8 @@ def pre_grad_passes(gm: torch.fx.GraphModule, example_inputs=None):
     gm.graph.lint()
     gm.recompile()
     optimus_scuba_log["after_recompile_pre_grad"] = upload_graph(gm.graph)
+    print("after recompile in pre grad: ", upload_graph(gm.graph))
+    print("inductor counter: ", counters["inductor"])
 
     if (
         config.pattern_matcher

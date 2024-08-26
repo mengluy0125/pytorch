@@ -145,6 +145,8 @@ def post_grad_passes(gm: torch.fx.GraphModule, is_inference: bool):
 
     gm.recompile()
     optimus_scuba_log["after_recompile_post_grad"] = upload_graph(gm.graph)
+    print("after recompile in post grad: ", upload_graph(gm.graph))
+    print("counters of inductor: ", counters["inductor"])
     gm.graph.lint()
 
 
